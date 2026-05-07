@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>提示词优化器 — Prompt Optimizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf7f2;
+  --bg-card: #ffffff;
+  --bg-input: #f5f0e8;
+  --text: #2c2416;
+  --text-secondary: #6b5e4a;
+  --text-muted: #9b8c74;
+  --border: #e5dccf;
+  --accent: #c7681e;
+  --accent-hover: #a8551a;
+  --accent-glow: rgba(199, 104, 30, 0.12);
+  --tab-bg: #f5f0e8;
+  --tab-active: #2c2416;
+  --tab-inactive: #8b7a60;
+  --code-bg: #faf7f2;
+  --shadow-sm: 0 1px 2px rgba(44,36,22,0.04);
+  --shadow-md: 0 4px 24px rgba(44,36,22,0.06);
+  --shadow-lg: 0 12px 48px rgba(44,36,22,0.08);
+  --radius: 12px;
+  --radius-lg: 20px;
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  --bg: #1a1814;
+  --bg-card: #24211a;
+  --bg-input: #2d2920;
+  --text: #e8e0d0;
+  --text-secondary: #a89878;
+  --text-muted: #6b5e4a;
+  --border: #3d3528;
+  --accent: #e0873a;
+  --accent-hover: #f09a4a;
+  --accent-glow: rgba(224, 135, 58, 0.15);
+  --tab-bg: #2d2920;
+  --tab-active: #e8e0d0;
+  --tab-inactive: #7a6d58;
+  --code-bg: #1e1b15;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 24px rgba(0,0,0,0.3);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.4);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Noto Serif SC', 'STSong', 'Songti SC', 'SimSun', serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* Background texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, var(--accent-glow) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 60%, rgba(139,122,96,0.06) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.logo-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+h1 {
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  letter-spacing: 0.02em;
+}
+
+/* Theme toggle */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+}
+.theme-toggle:hover {
+  transform: scale(1.08);
+  box-shadow: var(--shadow-md);
+}
+
+/* Card */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition);
+}
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.card-header .icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.card-header h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+/* Input */
+textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  resize: vertical;
+  transition: all var(--transition);
+  outline: none;
+}
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+textarea::placeholder {
+  color: var(--text-muted);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.9rem;
+}
+
+/* API Key section */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  font-family: inherit;
+  transition: color var(--transition);
+}
+.settings-toggle:hover { color: var(--accent); }
+.settings-toggle .arrow {
+  display: inline-block;
+  transition: transform var(--transition);
+  font-size: 12px;
+}
+.settings-toggle.open .arrow { transform: rotate(90deg); }
+
+.settings-panel {
+  display: none;
+  padding: 16px 0 0;
+}
+.settings-panel.show { display: block; }
+
+.api-key-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.api-key-row input {
+  flex: 1;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  outline: none;
+  transition: all var(--transition);
+}
+.api-key-row input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.api-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+.api-status.saved {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+}
+.api-status.empty {
+  background: rgba(158, 158, 158, 0.1);
+  color: #9e9e9e;
+}
+
+/* Button */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  width: 100%;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px var(--accent-glow);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.btn-ghost:hover {
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error */
+.error-banner {
+  background: rgba(244, 67, 54, 0.08);
+  border: 1px solid rgba(244, 67, 54, 0.2);
+  color: #d32f2f;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  margin-top: 12px;
+  display: none;
+}
+.error-banner.show { display: block; }
+
+/* Results */
+.results-section {
+  display: none;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.results-section.show {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-input);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.tab {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--tab-inactive);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all var(--transition);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  background: var(--bg-card);
+  color: var(--tab-active);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+/* Result content */
+.result-panel {
+  display: none;
+}
+.result-panel.active { display: block; }
+
+.result-content {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.88rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+  color: var(--text);
+  position: relative;
+}
+
+.result-content::-webkit-scrollbar {
+  width: 6px;
+}
+.result-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.result-content::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Copy button */
+.copy-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.copy-btn.copied {
+  border-color: #4caf50;
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.06);
+}
+
+/* Compare table */
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+.compare-table th {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 2px solid var(--border);
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.compare-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+.compare-table .strategy {
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.compare-table tr:hover td {
+  background: var(--bg-input);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+.empty-state .big-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+.empty-state p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .container { padding: 24px 16px 60px; }
+  h1 { font-size: 1.8rem; }
+  .card { padding: 20px; }
+  .tabs { gap: 2px; }
+  .tab { padding: 10px 12px; font-size: 0.78rem; }
+  .result-content { padding: 16px; font-size: 0.82rem; max-height: 360px; }
+  .theme-toggle { top: 12px; right: 12px; width: 36px; height: 36px; font-size: 16px; }
+  .api-key-row { flex-direction: column; }
+}
+
+/* Fade in animation */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fadeInUp 0.5s ease forwards;
+}
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深色/浅色模式">☀️</button>
+
+<div class="container">
+  <!-- Header -->
+  <header class="header animate-in">
+    <div class="logo">
+      <div class="logo-icon">◆</div>
+    </div>
+    <h1>提示词优化器</h1>
+    <p class="subtitle">将草稿级 Prompt 精炼为四种策略优化版本，一键对比选择</p>
+  </header>
+
+  <!-- Input Card -->
+  <div class="card animate-in" style="animation-delay: 0.1s">
+    <div class="card-header">
+      <div class="icon">✏️</div>
+      <h3>输入你的草稿 Prompt</h3>
+    </div>
+    <textarea
+      id="draftInput"
+      placeholder="在这里粘贴你的草稿 prompt…&#10;&#10;例如：帮我写一份竞品分析报告&#10;&#10;例如：分析这段代码有什么问题，并给出改进建议&#10;&#10;提示越具体，优化效果越好——但也支持模糊的需求描述。"
+    ></textarea>
+
+    <!-- Settings -->
+    <button class="settings-toggle" id="settingsToggle">
+      <span class="arrow">▶</span> 设置 API Key
+    </button>
+    <div class="settings-panel" id="settingsPanel">
+      <div class="api-key-row">
+        <input
+          type="password"
+          id="apiKeyInput"
+          placeholder="输入你的 Anthropic API Key (sk-ant-...)"
+          autocomplete="off"
+        />
+        <span class="api-status empty" id="apiStatus">未设置</span>
+      </div>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">
+        Key 仅存储在浏览器本地，通过 HTTPS 直接调用 Anthropic API，不会经过任何第三方服务器。
+        <a href="https://console.anthropic.com/" target="_blank" rel="noopener" style="color:var(--accent);">获取 API Key →</a>
+      </p>
+    </div>
+
+    <button class="btn btn-primary" id="optimizeBtn" disabled>
+      ✦ 开始优化
+    </button>
+    <div class="error-banner" id="errorBanner"></div>
+  </div>
+
+  <!-- Results Section -->
+  <div class="results-section" id="resultsSection">
+    <!-- Tabs -->
+    <div class="tabs" id="tabBar">
+      <button class="tab active" data-tab="A">
+        <span class="tab-label">策略 A</span>详细展开式
+      </button>
+      <button class="tab" data-tab="B">
+        <span class="tab-label">策略 B</span>角色扮演式
+      </button>
+      <button class="tab" data-tab="C">
+        <span class="tab-label">策略 C</span>结构化式
+      </button>
+      <button class="tab" data-tab="D">
+        <span class="tab-label">策略 D</span>逆向提炼式
+      </button>
+    </div>
+
+    <!-- Panels -->
+    <div class="card">
+      <div class="result-panel active" id="panelA">
+        <div class="result-content" id="resultA">
+          <div class="empty-state">
+            <div class="big-icon">📋</div>
+            <p>优化结果将在这里显示</p>
+          </div>
+        </div>
+        <div class="copy-bar">
+          <button class="copy-btn" data-target="resultA">📋 复制</button>
+        </div>
+      </div>
+      <div class="result-panel" id="panelB">
+        <div class="result-content" id="resultB">
+          <div class="empty-state">
+            <div class="big-icon">🎭</div>
+            <p>优化结果将在这里显示</p>
+          </div>
+        </div>
+        <div class="copy-bar">
+          <button class="copy-btn" data-target="resultB">📋 复制</button>
+        </div>
+      </div>
+      <div class="result-panel" id="panelC">
+        <div class="result-content" id="resultC">
+          <div class="empty-state">
+            <div class="big-icon">🏗️</div>
+            <p>优化结果将在这里显示</p>
+          </div>
+        </div>
+        <div class="copy-bar">
+          <button class="copy-btn" data-target="resultC">📋 复制</button>
+        </div>
+      </div>
+      <div class="result-panel" id="panelD">
+        <div class="result-content" id="resultD">
+          <div class="empty-state">
+            <div class="big-icon">🔍</div>
+            <p>优化结果将在这里显示</p>
+          </div>
+        </div>
+        <div class="copy-bar">
+          <button class="copy-btn" data-target="resultD">📋 复制</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Strategy Compare Table -->
+    <div class="card animate-in">
+      <div class="card-header">
+        <div class="icon">📊</div>
+        <h3>四种策略对比</h3>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th>策略</th>
+              <th>核心思路</th>
+              <th>优化方向</th>
+              <th>适合场景</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="strategy">A 详细展开式</td>
+              <td>补充上下文、约束、输出格式、成功标准</td>
+              <td>明确边界、指定格式、定义完成标准</td>
+              <td>任务清晰但缺细节、需确定性输出</td>
+            </tr>
+            <tr>
+              <td class="strategy">B 角色扮演式</td>
+              <td>赋予专家人设 + 思维链引导</td>
+              <td>设定身份、嵌入推理要求、加入方法论</td>
+              <td>深度分析、创意生成、策略建议</td>
+            </tr>
+            <tr>
+              <td class="strategy">C 结构化式</td>
+              <td>拆解为多步骤，每步有输入/输出</td>
+              <td>3-7 子步骤、验证标准、检查点</td>
+              <td>复杂多步骤任务、需过程可控</td>
+            </tr>
+            <tr>
+              <td class="strategy">D 逆向提炼式</td>
+              <td>从模糊需求推断真实目标</td>
+              <td>目标前置、few-shot、迭代机制</td>
+              <td>需求模糊、探索性任务</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    Built with ◆ &nbsp;·&nbsp; Powered by Claude API &nbsp;·&nbsp; 提示词优化器
+  </footer>
+</div>
+
+<script>
+(function () {
+  // ── DOM refs ──────────────────────────────
+  const draftInput = document.getElementById('draftInput');
+  const optimizeBtn = document.getElementById('optimizeBtn');
+  const errorBanner = document.getElementById('errorBanner');
+  const resultsSection = document.getElementById('resultsSection');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const apiStatus = document.getElementById('apiStatus');
+  const settingsToggle = document.getElementById('settingsToggle');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const themeToggle = document.getElementById('themeToggle');
+  const tabBar = document.getElementById('tabBar');
+
+  // ── State ──────────────────────────────────
+  const STORAGE_KEY = 'po_anthropic_key';
+  const THEME_KEY = 'po_theme';
+  let apiKey = localStorage.getItem(STORAGE_KEY) || '';
+  let results = { A: '', B: '', C: '', D: '' };
+
+  // ── Theme ──────────────────────────────────
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeToggle.textContent = theme === 'dark' ? '🌙' : '☀️';
+    localStorage.setItem(THEME_KEY, theme);
+  }
+  const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
+  applyTheme(savedTheme);
+
+  themeToggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+
+  // ── Settings ──────────────────────────────
+  if (apiKey) {
+    apiKeyInput.value = apiKey;
+    apiStatus.textContent = '已保存';
+    apiStatus.className = 'api-status saved';
+    updateOptimizeButton();
+  }
+
+  settingsToggle.addEventListener('click', () => {
+    const open = settingsPanel.classList.toggle('show');
+    settingsToggle.classList.toggle('open', open);
+  });
+
+  apiKeyInput.addEventListener('input', () => {
+    apiKey = apiKeyInput.value.trim();
+    if (apiKey) {
+      localStorage.setItem(STORAGE_KEY, apiKey);
+      apiStatus.textContent = '已保存';
+      apiStatus.className = 'api-status saved';
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+      apiStatus.textContent = '未设置';
+      apiStatus.className = 'api-status empty';
+    }
+    updateOptimizeButton();
+  });
+
+  draftInput.addEventListener('input', updateOptimizeButton);
+
+  function updateOptimizeButton() {
+    optimizeBtn.disabled = !draftInput.value.trim() || !apiKey;
+  }
+
+  // ── API call ──────────────────────────────
+  const STRATEGIES = {
+    A: '你是一个提示词工程专家。请将用户提供的草稿级 prompt 优化为"详细展开式"版本。补充上下文、约束、边界条件、输出格式、成功标准。指定输出格式，给出正例或反例，明确边界和限制条件，定义"什么叫完成了"。直接输出优化后的完整 prompt，不要额外解释。',
+    B: '你是一个提示词工程专家。请将用户提供的草稿级 prompt 优化为"角色扮演式"版本。赋予专家人设 + 思维链引导，激发模型深层能力。设定专家角色（身份/经验/视角），嵌入思维链要求（"先分析再执行"/"逐步推理"/"设身处地思考"），加入方法论（SWOT、第一性原理、MECE等），指定语气和风格。直接输出优化后的完整 prompt，不要额外解释。',
+    C: '你是一个提示词工程专家。请将用户提供的草稿级 prompt 优化为"结构化式"版本。将模糊任务拆解为多个子步骤（3-7步），每步指定输入、输出、验证标准，用编号或层级结构组织，加入检查点或自检机制。直接输出优化后的完整 prompt，不要额外解释。',
+    D: '你是一个提示词工程专家。请将用户提供的草稿级 prompt 优化为"逆向提炼式"版本。从模糊需求中推断用户的真实目标，重构 prompt 的组织逻辑。识别"真正目的"（做什么 vs 为什么做），将目标前置、任务后置，举例示意期望的输出（few-shot），加入迭代修正机制。直接输出优化后的完整 prompt，不要额外解释。'
+  };
+
+  async function callAnthropic(systemPrompt, userMessage) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        temperature: 0.7,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }]
+      })
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      let msg;
+      try {
+        const errJson = JSON.parse(errBody);
+        msg = errJson.error?.message || `HTTP ${res.status}`;
+      } catch {
+        msg = `HTTP ${res.status}: ${errBody.slice(0, 200)}`;
+      }
+      throw new Error(msg);
+    }
+
+    const data = await res.json();
+    return data.content[0]?.text || '';
+  }
+
+  // ── Optimize ──────────────────────────────
+  optimizeBtn.addEventListener('click', async () => {
+    const draft = draftInput.value.trim();
+    if (!draft || !apiKey) return;
+
+    // Reset state
+    errorBanner.classList.remove('show');
+    errorBanner.textContent = '';
+    optimizeBtn.disabled = true;
+    optimizeBtn.innerHTML = '<span class="spinner"></span> 正在优化...';
+
+    results = { A: '', B: '', C: '', D: '' };
+    const panelIds = ['A', 'B', 'C', 'D'];
+
+    // Show loading in all panels
+    panelIds.forEach(id => {
+      const el = document.getElementById('result' + id);
+      el.innerHTML = '<div class="empty-state"><div class="big-icon">⏳</div><p>生成中...</p></div>';
+    });
+
+    resultsSection.classList.add('show');
+
+    // Fire all 4 requests in parallel
+    const promises = panelIds.map(id =>
+      callAnthropic(STRATEGIES[id], draft)
+        .then(text => { results[id] = text; return { id, text, ok: true }; })
+        .catch(err => { results[id] = `[错误] ${err.message}`; return { id, text: results[id], ok: false, err }; })
+    );
+
+    const outcomes = await Promise.all(promises);
+
+    // Render results
+    panelIds.forEach(id => {
+      const el = document.getElementById('result' + id);
+      el.textContent = results[id];
+    });
+
+    // Check for errors
+    const firstError = outcomes.find(o => !o.ok);
+    if (firstError) {
+      errorBanner.textContent = `⚠️ 部分请求失败：${firstError.err.message}`;
+      errorBanner.classList.add('show');
+    }
+
+    // Reset button
+    optimizeBtn.disabled = false;
+    optimizeBtn.innerHTML = '✦ 重新优化';
+
+    // Scroll to results
+    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // ── Tab switching ──────────────────────────
+  tabBar.addEventListener('click', (e) => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+
+    const targetId = tab.dataset.tab;
+
+    // Update tabs
+    tabBar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    // Update panels
+    document.querySelectorAll('.result-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel' + targetId).classList.add('active');
+  });
+
+  // ── Copy ────────────────────────────────────
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.copy-btn');
+    if (!btn) return;
+
+    const targetId = btn.dataset.target;
+    const text = document.getElementById(targetId).textContent;
+
+    navigator.clipboard.writeText(text).then(() => {
+      btn.classList.add('copied');
+      btn.innerHTML = '✓ 已复制';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = '📋 复制';
+      }, 2000);
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.classList.add('copied');
+      btn.innerHTML = '✓ 已复制';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = '📋 复制';
+      }, 2000);
+    });
+  });
+
+  // ── Keyboard shortcut ──────────────────────
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !optimizeBtn.disabled) {
+      e.preventDefault();
+      optimizeBtn.click();
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>
